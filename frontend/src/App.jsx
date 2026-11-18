@@ -13,12 +13,14 @@ import { BrowserRouter, Routes, Route, Link, NavLink, useParams, useNavigate } f
 import {
   Search, Package, Bell, Home, ChevronDown, Sparkles,
   Cpu, Zap, Shield, ArrowRight, ExternalLink, Activity,
-  CheckCircle2, ArrowUpRight,
+  CheckCircle2, ArrowUpRight, Plus, Layers
 } from 'lucide-react';
 
 import NotificationBell from './components/NotificationBell.jsx';
 import ToastContainer, { useToasts } from './components/ToastNotification.jsx';
 import NotificationsPage from './pages/NotificationsPage.jsx';
+import ItemsPage from './pages/ItemsPage.jsx';
+import CreateItemPage from './pages/CreateItemPage.jsx';
 
 import {
   markAsRead,
@@ -362,17 +364,30 @@ const Navbar = ({
             <span>Accueil</span>
           </NavLink>
 
-          <span className="slf-nav-item disabled">
+          <NavLink
+            to="/items?type=LOST"
+            className={({ isActive }) => `slf-nav-item${isActive ? ' active' : ''}`}
+          >
             <Search size={15} />
             <span>Objets perdus</span>
-            <span className="slf-badge-soon">Bientôt</span>
-          </span>
+          </NavLink>
 
-          <span className="slf-nav-item disabled">
+          <NavLink
+            to="/items?type=FOUND"
+            className={({ isActive }) => `slf-nav-item${isActive ? ' active' : ''}`}
+          >
             <Package size={15} />
             <span>Objets trouvés</span>
-            <span className="slf-badge-soon">Bientôt</span>
-          </span>
+          </NavLink>
+
+          <NavLink
+            to="/items"
+            end
+            className={({ isActive }) => `slf-nav-item${isActive ? ' active' : ''}`}
+          >
+            <Layers size={15} />
+            <span>Tous les objets</span>
+          </NavLink>
 
           <NavLink
             to="/notifications"
@@ -386,8 +401,28 @@ const Navbar = ({
           </NavLink>
         </div>
 
-        {/* Côté droit : Cloche + Sélecteur Utilisateur */}
+        {/* Côté droit : Bouton Déclarer + Cloche + Sélecteur Utilisateur */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexShrink: 0 }}>
+          {/* Bouton Déclarer un objet */}
+          <Link
+            to="/create-item"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+              color: '#FFFFFF',
+              padding: '0.38rem 0.85rem',
+              borderRadius: '999px',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              textDecoration: 'none',
+              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+            }}
+          >
+            <Plus size={14} /> Déclarer
+          </Link>
+
           {/* Popover Cloche */}
           <NotificationBell
             notifications={notifications}
@@ -460,11 +495,10 @@ const HomePage = ({ notifications = [], unreadCount = 0 }) => {
           <ArrowRight size={16} />
         </Link>
 
-        <span className="slf-cta-secondary" style={{ cursor: 'default', opacity: 0.75 }}>
-          <Search size={16} />
+        <Link to="/create-item" className="slf-cta-secondary">
+          <Plus size={16} />
           <span>Déclarer un objet</span>
-          <span className="slf-badge-soon">Bientôt disponible</span>
-        </span>
+        </Link>
       </div>
 
       {/* Bento Grid 3 Colonnes : Aperçu du système en temps réel */}
@@ -775,6 +809,14 @@ const App = () => {
           <Route
             path="/"
             element={<HomePage notifications={notifications} unreadCount={unreadCount} />}
+          />
+          <Route
+            path="/items"
+            element={<ItemsPage userId={userId} />}
+          />
+          <Route
+            path="/create-item"
+            element={<CreateItemPage userId={userId} />}
           />
           <Route
             path="/notifications"

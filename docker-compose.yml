@@ -63,6 +63,30 @@ services:
       - slf-network
 
   # ══════════════════════════════════════════
+  #  item-service — FastAPI (Port 8000)
+  # ══════════════════════════════════════════
+  item-service:
+    build:
+      context: ./item-service
+      dockerfile: Dockerfile
+    container_name: slf-item-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-slf_user}:${MYSQL_PASSWORD:-slf_password}@mysql:3306/${MYSQL_DATABASE:-item_db}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-smartlostfound.exchange}
+      RABBITMQ_ITEM_ROUTING_KEY: ${RABBITMQ_ITEM_ROUTING_KEY:-item.created}
+    ports:
+      - "${ITEM_SERVICE_PORT:-8000}:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - slf-network
+
+  # ══════════════════════════════════════════
   #  notification-service — Port 8083
   # ══════════════════════════════════════════
   notification-service:
