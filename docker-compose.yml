@@ -1,0 +1,167 @@
+# ════════════════════════════════════════════════════════════════
+#  docker-compose.yml — Smart Lost & Found
+#  Orchestration complète : MySQL, RabbitMQ, services backend, frontend
+#
+#  Usage :
+#    docker compose up --build          # Premier lancement (avec rebuild)
+#    docker compose up -d               # En arrière-plan
+#    docker compose down -v             # Arrêt + suppression des volumes
+#    docker compose logs -f <service>   # Logs en temps réel
+# ════════════════════════════════════════════════════════════════
+
+services:
+
+  # ══════════════════════════════════════════
+  #  MySQL 8 — Base de données
+  # ══════════════════════════════════════════
+  mysql:
+    image: mysql:8.0
+    container_name: slf-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD:          ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE:               ${MYSQL_DATABASE:-smart_lost_found_notifications}
+      MYSQL_USER:                   ${MYSQL_USER:-slf_user}
+      MYSQL_PASSWORD:               ${MYSQL_PASSWORD:-slf_password}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d  # Scripts SQL d'initialisation optionnels
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - slf-network
+
+  # ══════════════════════════════════════════
+  #  RabbitMQ 3 — Messagerie asynchrone
+  # ══════════════════════════════════════════
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: slf-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER:  ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS:  ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    ports:
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"    # AMQP (clients)
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"  # Management UI → http://localhost:15672
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - slf-network
+
+  # ══════════════════════════════════════════
+  #  notification-service — Port 8083
+  # ══════════════════════════════════════════
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: slf-notification-service
+    restart: unless-stopped
+    environment:
+      # MySQL — pointe vers le service Docker "mysql"
+      SPRING_DATASOURCE_URL:      jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-smart_lost_found_notifications}?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-slf_user}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-slf_password}
+      # RabbitMQ — pointe vers le service Docker "rabbitmq"
+      # Pour utiliser CloudAMQP en production, remplacez par l'URL CloudAMQP dans .env
+      SPRING_RABBITMQ_HOST:       ${RABBITMQ_HOST:-rabbitmq}
+      SPRING_RABBITMQ_PORT:       ${RABBITMQ_AMQP_PORT:-5672}
+      SPRING_RABBITMQ_USERNAME:   ${RABBITMQ_USER:-guest}
+      SPRING_RABBITMQ_PASSWORD:   ${RABBITMQ_PASSWORD:-guest}
+      SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-/}
+      # JVM
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseContainerSupport"
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-8083}:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    networks:
+      - slf-network
+
+  # ══════════════════════════════════════════
+  #  api-gateway — Port 8080
+  # ══════════════════════════════════════════
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: slf-api-gateway
+    restart: unless-stopped
+    environment:
+      # Surcharger les URIs des routes pour pointer vers les conteneurs Docker
+      SPRING_CLOUD_GATEWAY_ROUTES_0_URI: http://notification-service:8083
+      JAVA_OPTS: "-Xms128m -Xmx256m -XX:+UseContainerSupport"
+    ports:
+      - "${API_GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      notification-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - slf-network
+
+  # ══════════════════════════════════════════
+  #  frontend — React + Nginx (Port 3000)
+  # ══════════════════════════════════════════
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # En mode Docker, le frontend nginx proxifie /api/ vers api-gateway:8080 (voir nginx.conf)
+        # Cette variable est utilisée uniquement pour les requêtes directes (hors proxy nginx)
+        VITE_API_BASE_URL: http://api-gateway:8080
+    container_name: slf-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - slf-network
+
+# ══════════════════════════════════════════
+#  Volumes persistants
+# ══════════════════════════════════════════
+volumes:
+  mysql_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+# ══════════════════════════════════════════
+#  Réseau interne Docker
+# ══════════════════════════════════════════
+networks:
+  slf-network:
+    driver: bridge
+    name: smart-lost-found-network

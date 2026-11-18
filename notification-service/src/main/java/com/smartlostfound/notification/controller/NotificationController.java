@@ -11,7 +11,10 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/notifications")
-@CrossOrigin(origins = "*")
+// @CrossOrigin retiré intentionnellement : le CORS est géré exclusivement
+// par CorsGlobalConfig (CorsWebFilter) dans api-gateway.
+// Le garder ici provoquerait un double en-tête Access-Control-Allow-Origin
+// qui bloque les navigateurs (spec CORS § 7.1.5).
 public class NotificationController {
 
     private final NotificationService notificationService;

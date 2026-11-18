@@ -8,6 +8,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
+/**
+ * Consommateur unique RabbitMQ pour les événements de correspondance.
+ * Écoute la queue "notification.match.queue" et enregistre automatiquement
+ * chaque événement MatchFoundEvent en base de données.
+ */
 @Component
 public class MatchEventConsumer {
 
@@ -20,15 +25,21 @@ public class MatchEventConsumer {
 
     @RabbitListener(queues = RabbitMQConfig.QUEUE_NAME)
     public void handleMatchFoundEvent(MatchFoundEvent event) {
-        log.info("Événement MatchFound reçu pour userId={} (lostItemId={}, foundItemId={})",
-                event.getUserId(), event.getLostItemId(), event.getFoundItemId());
+        log.info("[RabbitMQ] MatchFoundEvent reçu : userId={}, lostItemId={}, foundItemId={}, score={}%",
+                event.getUserId(), event.getLostItemId(), event.getFoundItemId(), event.getScore());
 
-        String title = event.getItemTitle() != null ? event.getItemTitle() : "votre objet";
-        String locationInfo = event.getLocation() != null ? " à " + event.getLocation() : "";
+        String title = (event.getItemTitle() != null && !event.getItemTitle().isBlank())
+                ? event.getItemTitle()
+                : "votre objet";
+
+        String location = (event.getLocation() != null && !event.getLocation().isBlank())
+                ? " à " + event.getLocation()
+                : "";
+
         double scoreValue = event.getScore() != null ? event.getScore() : 0.0;
 
-        String message = String.format("Correspondance trouvée (%.1f%%) pour %s%s.",
-                scoreValue, title, locationInfo);
+        String message = String.format("Correspondance trouvée à %.1f%% pour '%s'%s",
+                scoreValue, title, location);
 
         notificationService.createNotification(
                 event.getUserId(),
@@ -37,5 +48,7 @@ public class MatchEventConsumer {
                 event.getScore(),
                 message
         );
+
+        log.info("[RabbitMQ] Notification enregistrée avec succès pour userId={}", event.getUserId());
     }
 }
