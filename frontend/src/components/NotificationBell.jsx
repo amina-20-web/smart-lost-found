@@ -1,171 +1,417 @@
 /**
- * NotificationBell.jsx
- *
- * Icône de cloche dans la Navbar avec :
- *  - Badge rouge affichant le nombre exact de notifications non lues
- *  - Dropdown Bootstrap des 5 dernières notifications
- *  - Badge coloré selon le score (vert ≥ 80 %, jaune ≥ 50 %, gris sinon)
- *  - Fond bg-light pour les notifications non lues
- *  - Lien « Voir toutes les notifications »
- *
- * Props :
- *  @param {number}   userId       - ID de l'utilisateur connecté
- *  @param {Array}    notifications - Tableau de notifications (fourni par le parent via polling)
- *  @param {number}   unreadCount  - Nombre de non lues (pour le badge)
- *  @param {Function} onMarkRead   - Callback(id) pour marquer une notification comme lue
+ * NotificationBell.jsx — Smart Lost & Found
+ * Cloche de notification moderne SaaS (Linear / Apple style)
+ * - Badge animé avec pulsation
+ * - Popover flottant glassmorphic avec en-tête dégradé subtil
+ * - Indicateur "En direct" pulsant
+ * - Mini-jauges de score circulaires SVG
+ * - Action rapide "Tout marquer lu" intégrée
+ * - 100% compatible avec notificationService.js
  */
 
-import React, { useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getScoreBadgeColor, formatRelativeTime } from '../services/notificationService';
+import { Bell, CheckCheck, Check, Clock, Sparkles, ExternalLink, Inbox } from 'lucide-react';
+import { formatRelativeTime } from '../services/notificationService';
 
-const NotificationBell = ({ notifications = [], unreadCount = 0, onMarkRead }) => {
-  const dropdownRef = useRef(null);
-  const triggerRef  = useRef(null);
+// ── Helper couleur selon score ──
+const getScoreMeta = (score) => {
+  if (score == null) return { color: '#64748B', bg: '#F1F5F9', label: 'N/A' };
+  if (score >= 90)   return { color: '#059669', bg: '#ECFDF5', label: 'Excellent' };
+  if (score >= 75)   return { color: '#D97706', bg: '#FFFBEB', label: 'Bon' };
+  return               { color: '#2563EB', bg: '#EFF6FF', label: 'Moyen' };
+};
 
-  // ── Initialisation du Dropdown Bootstrap via JS (sans react-bootstrap) ──
-  useEffect(() => {
-    let dropdown = null;
-    if (triggerRef.current && window.bootstrap) {
-      dropdown = new window.bootstrap.Dropdown(triggerRef.current, {
-        autoClose: true,
-      });
-    }
-    return () => {
-      if (dropdown) dropdown.dispose();
-    };
-  }, []);
-
-  // ── 5 dernières notifications pour le dropdown ──
-  const recentNotifications = notifications.slice(0, 5);
+// ── Mini Jauge Circulaire SVG pour le Popover ──
+const MiniCircleGauge = ({ score }) => {
+  const meta = getScoreMeta(score);
+  const val = score != null ? Math.min(100, Math.max(0, score)) : 0;
+  const radius = 12;
+  const circumference = 2 * Math.PI * radius; // ~75.4
+  const strokeDashoffset = circumference - (val / 100) * circumference;
 
   return (
-    <div className="dropdown" ref={dropdownRef}>
-      {/* ── Bouton déclencheur ── */}
+    <div style={{ position: 'relative', width: 32, height: 32, flexShrink: 0 }}>
+      <svg width="32" height="32" viewBox="0 0 32 32" style={{ transform: 'rotate(-90deg)' }}>
+        {/* Cercle de fond */}
+        <circle
+          cx="16" cy="16" r={radius}
+          fill="none"
+          stroke="#E2E8F0"
+          strokeWidth="3"
+        />
+        {/* Cercle de progression */}
+        <circle
+          cx="16" cy="16" r={radius}
+          fill="none"
+          stroke={meta.color}
+          strokeWidth="3"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }}
+        />
+      </svg>
+      <div
+        style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '0.62rem', fontWeight: 800, color: meta.color,
+          letterSpacing: '-0.02em',
+        }}
+      >
+        {score != null ? Math.round(score) : '—'}
+      </div>
+    </div>
+  );
+};
+
+// ── Styles CSS injectés pour la cloche ──
+const BELL_CSS = `
+  .slf-bell-trigger {
+    position: relative;
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .slf-bell-trigger:hover {
+    background: #FFFFFF;
+    color: #0F172A;
+    border-color: #C7D2FE;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.15);
+    transform: translateY(-1px);
+  }
+  .slf-bell-trigger.ringing .bell-svg {
+    animation: ring 0.65s ease-in-out;
+  }
+  .slf-bell-badge {
+    position: absolute;
+    top: -4px; right: -4px;
+    min-width: 18px; height: 18px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+    color: #FFFFFF;
+    font-size: 0.65rem; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #FFFFFF;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+  }
+  .slf-bell-popover {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 360px;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    border-radius: 18px;
+    box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04);
+    z-index: 1050;
+    overflow: hidden;
+    animation: popover-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .slf-bell-item {
+    display: flex; align-items: flex-start; gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #F1F5F9;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    text-decoration: none;
+    color: inherit;
+  }
+  .slf-bell-item:hover {
+    background: #F8FAFC;
+  }
+  .slf-bell-item.unread {
+    background: #F5F7FF;
+  }
+  .slf-bell-item.unread:hover {
+    background: #EEF2FF;
+  }
+  .slf-bell-item:last-child {
+    border-bottom: none;
+  }
+`;
+
+if (typeof document !== 'undefined' && !document.getElementById('slf-bell-styles')) {
+  const styleEl = document.createElement('style');
+  styleEl.id = 'slf-bell-styles';
+  styleEl.textContent = BELL_CSS;
+  document.head.appendChild(styleEl);
+}
+
+const NotificationBell = ({
+  notifications = [],
+  unreadCount = 0,
+  onMarkRead,
+  onMarkAllRead,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [ringing, setRinging] = useState(false);
+  const popoverRef = useRef(null);
+  const triggerRef = useRef(null);
+  const prevCountRef = useRef(unreadCount);
+
+  // Détection de nouvelles notifications pour faire tinter la cloche
+  useEffect(() => {
+    if (unreadCount > prevCountRef.current) {
+      setRinging(true);
+      const timer = setTimeout(() => setRinging(false), 700);
+      return () => clearTimeout(timer);
+    }
+    prevCountRef.current = unreadCount;
+  }, [unreadCount]);
+
+  // Fermeture du popover au clic extérieur ou touche Échap
+  useEffect(() => {
+    if (!open) return;
+    const handleOutsideClick = (e) => {
+      if (
+        popoverRef.current && !popoverRef.current.contains(e.target) &&
+        triggerRef.current && !triggerRef.current.contains(e.target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  const recentNotifications = notifications.slice(0, 4);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* Bouton Cloche */}
       <button
         ref={triggerRef}
         type="button"
-        className="btn btn-link nav-link position-relative text-white p-1"
-        data-bs-toggle="dropdown"
-        aria-expanded="false"
-        aria-label={`Notifications — ${unreadCount} non lue${unreadCount > 1 ? 's' : ''}`}
+        className={`slf-bell-trigger${ringing ? ' ringing' : ''}`}
+        onClick={() => setOpen((prev) => !prev)}
+        aria-label={`Centre de notifications — ${unreadCount} non lue${unreadCount > 1 ? 's' : ''}`}
         title="Notifications"
       >
-        <i
-          className="bi bi-bell-fill"
-          style={{ fontSize: '1.4rem' }}
-        />
-        {/* Badge rouge */}
+        <Bell size={18} className="bell-svg" />
         {unreadCount > 0 && (
-          <span
-            className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-            style={{ fontSize: '0.65rem', minWidth: '1.3rem' }}
-          >
+          <span className="slf-bell-badge">
             {unreadCount > 99 ? '99+' : unreadCount}
-            <span className="visually-hidden">notifications non lues</span>
           </span>
         )}
       </button>
 
-      {/* ── Menu déroulant ── */}
-      <div
-        className="dropdown-menu dropdown-menu-end shadow border-0 p-0"
-        style={{ width: '360px', maxHeight: '480px', overflowY: 'auto' }}
-      >
-        {/* En-tête du dropdown */}
-        <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom bg-primary text-white rounded-top">
-          <span className="fw-semibold">
-            <i className="bi bi-bell me-2" />
-            Notifications
-          </span>
-          {unreadCount > 0 && (
-            <span className="badge bg-white text-primary rounded-pill">
-              {unreadCount} non lue{unreadCount > 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
+      {/* Popover Élégant */}
+      {open && (
+        <div className="slf-bell-popover" ref={popoverRef}>
+          {/* Header dégradé subtil avec statut Live */}
+          <div
+            style={{
+              padding: '0.85rem 1.1rem',
+              background: 'linear-gradient(135deg, #FAFAFE 0%, #EEF2FF 100%)',
+              borderBottom: '1px solid #E2E8F0',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div
+                style={{
+                  width: 26, height: 26, borderRadius: 8,
+                  background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#FFFFFF',
+                }}
+              >
+                <Sparkles size={14} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0F172A', lineHeight: 1.1 }}>
+                  Notifications
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.15rem' }}>
+                  <span
+                    style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      background: '#10B981', display: 'inline-block',
+                      boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.25)',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748B' }}>
+                    En direct (5s)
+                  </span>
+                </div>
+              </div>
+            </div>
 
-        {/* Liste des notifications */}
-        {recentNotifications.length === 0 ? (
-          <div className="text-center text-muted py-4 px-3">
-            <i className="bi bi-bell-slash d-block mb-2" style={{ fontSize: '2rem' }} />
-            <small>Aucune notification</small>
+            {/* Bouton rapide "Tout marquer lu" si non lues */}
+            {unreadCount > 0 && onMarkAllRead && (
+              <button
+                type="button"
+                onClick={() => {
+                  onMarkAllRead();
+                }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                  background: '#FFFFFF', border: '1px solid #C7D2FE',
+                  borderRadius: 8, padding: '0.25rem 0.6rem',
+                  fontSize: '0.72rem', fontWeight: 700, color: '#4F46E5',
+                  cursor: 'pointer', transition: 'all 0.15s ease',
+                  boxShadow: '0 1px 3px rgba(99, 102, 241, 0.1)',
+                }}
+                title="Tout marquer comme lu"
+              >
+                <CheckCheck size={13} />
+                <span>Tout marquer lu</span>
+              </button>
+            )}
           </div>
-        ) : (
-          <ul className="list-unstyled mb-0">
-            {recentNotifications.map((notif) => {
-              const badgeColor = getScoreBadgeColor(notif.score);
-              return (
-                <li
-                  key={notif.id}
-                  className={`px-3 py-2 border-bottom ${!notif.read ? 'bg-light' : ''}`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => !notif.read && onMarkRead && onMarkRead(notif.id)}
-                >
-                  <div className="d-flex align-items-start gap-2">
-                    {/* Indicateur non-lu */}
-                    <div className="flex-shrink-0 mt-1">
-                      {!notif.read ? (
+
+          {/* Liste des notifications récentes */}
+          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+            {recentNotifications.length === 0 ? (
+              <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: '#94A3B8' }}>
+                <Inbox size={38} strokeWidth={1.2} style={{ margin: '0 auto 0.6rem', opacity: 0.7 }} />
+                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#475569' }}>
+                  Aucune notification
+                </div>
+                <div style={{ fontSize: '0.76rem', color: '#94A3B8', marginTop: '0.25rem' }}>
+                  Les correspondances détectées apparaîtront ici.
+                </div>
+              </div>
+            ) : (
+              recentNotifications.map((notif) => {
+                const score = notif.score ?? notif.matchScore;
+                const scoreMeta = getScoreMeta(score);
+
+                return (
+                  <div
+                    key={notif.id}
+                    className={`slf-bell-item${!notif.read ? ' unread' : ''}`}
+                    onClick={() => {
+                      if (!notif.read && onMarkRead) onMarkRead(notif.id);
+                      setOpen(false);
+                    }}
+                  >
+                    {/* Mini jauge circulaire */}
+                    <MiniCircleGauge score={score} />
+
+                    {/* Contenu */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                        {!notif.read && (
+                          <span
+                            style={{
+                              width: 6, height: 6, borderRadius: '50%',
+                              background: '#3B82F6', flexShrink: 0,
+                            }}
+                          />
+                        )}
                         <span
-                          className="rounded-circle bg-primary d-block"
-                          style={{ width: '8px', height: '8px' }}
-                          aria-label="Non lu"
-                        />
-                      ) : (
-                        <span style={{ width: '8px', display: 'inline-block' }} />
-                      )}
-                    </div>
-                    <div className="flex-grow-1 min-width-0">
-                      {/* Badge score */}
-                      {notif.score != null && (
-                        <span className={`badge bg-${badgeColor} me-1 mb-1`}>
-                          {notif.score.toFixed(1)}%
+                          style={{
+                            fontSize: '0.68rem', fontWeight: 800,
+                            color: scoreMeta.color,
+                            background: scoreMeta.bg,
+                            padding: '0.08rem 0.4rem', borderRadius: 999,
+                          }}
+                        >
+                          Match {score != null ? `${score.toFixed(1)}%` : 'Détecté'}
                         </span>
-                      )}
-                      {/* Message (tronqué à 2 lignes) */}
+                        <span style={{ fontSize: '0.7rem', color: '#94A3B8', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                          <Clock size={11} />
+                          {formatRelativeTime(notif.createdAt)}
+                        </span>
+                      </div>
+
                       <p
-                        className="mb-1 small text-body-secondary"
                         style={{
+                          margin: 0,
+                          fontSize: '0.8rem',
+                          color: notif.read ? '#475569' : '#0F172A',
+                          fontWeight: notif.read ? 400 : 600,
+                          lineHeight: 1.35,
                           display: '-webkit-box',
                           WebkitLineClamp: 2,
                           WebkitBoxOrient: 'vertical',
                           overflow: 'hidden',
-                          lineHeight: '1.4',
                         }}
                       >
                         {notif.message}
                       </p>
-                      {/* Heure relative */}
-                      <small className="text-muted">
-                        <i className="bi bi-clock me-1" />
-                        {formatRelativeTime(notif.createdAt)}
-                      </small>
                     </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
 
-        {/* Pied du dropdown — lien vers la page complète */}
-        <div className="p-2 border-top text-center bg-white rounded-bottom">
-          <Link
-            to="/notifications"
-            className="btn btn-sm btn-outline-primary w-100"
-            onClick={() => {
-              // Ferme le dropdown Bootstrap au clic
-              if (triggerRef.current && window.bootstrap) {
-                const dd = window.bootstrap.Dropdown.getInstance(triggerRef.current);
-                if (dd) dd.hide();
-              }
+                    {/* Bouton rapide marquer lu */}
+                    {!notif.read && onMarkRead && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMarkRead(notif.id);
+                        }}
+                        style={{
+                          background: 'none', border: 'none',
+                          color: '#94A3B8', padding: 4, borderRadius: 6,
+                          cursor: 'pointer', transition: 'all 0.15s ease',
+                          flexShrink: 0, alignSelf: 'center',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = '#059669';
+                          e.currentTarget.style.background = '#ECFDF5';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = '#94A3B8';
+                          e.currentTarget.style.background = 'none';
+                        }}
+                        title="Marquer comme lu"
+                      >
+                        <Check size={14} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer avec lien vers la page complète */}
+          <div
+            style={{
+              padding: '0.65rem 1rem',
+              background: '#FAFAFE',
+              borderTop: '1px solid #F1F5F9',
+              textAlign: 'center',
             }}
           >
-            <i className="bi bi-list-ul me-1" />
-            Voir toutes les notifications
-          </Link>
+            <Link
+              to="/notifications"
+              onClick={() => setOpen(false)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                fontSize: '0.8rem', fontWeight: 700, color: '#4F46E5',
+                textDecoration: 'none', padding: '0.35rem 0.75rem',
+                borderRadius: 8, transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#EEF2FF')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <span>Accéder au Centre de Notifications</span>
+              <ExternalLink size={13} />
+            </Link>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

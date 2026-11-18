@@ -1,0 +1,165 @@
+/* ── Global Styles & Design Tokens — Smart Lost & Found ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  /* Palette de couleurs Linear / Raycast */
+  --slate-50:  #F8FAFC;
+  --slate-100: #F1F5F9;
+  --slate-200: #E2E8F0;
+  --slate-300: #CBD5E1;
+  --slate-400: #94A3B8;
+  --slate-500: #64748B;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1E293B;
+  --slate-900: #0F172A;
+
+  --indigo-500: #6366F1;
+  --indigo-600: #4F46E5;
+  --indigo-700: #4338CA;
+  --violet-600: #7C3AED;
+
+  --emerald-500: #10B981;
+  --emerald-600: #059669;
+
+  --amber-500: #F59E0B;
+  --amber-600: #D97706;
+
+  --rose-500: #F43F5E;
+  --rose-600: #E11D48;
+
+  --blue-500: #3B82F6;
+  --blue-600: #2563EB;
+}
+
+html, body, #root {
+  min-height: 100%;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--slate-900);
+  background-color: var(--slate-50);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Fond subtil en dégradé radial léger (Halo mesh/gradient bleu-indigo) */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 55% at 15% -5%, rgba(99, 102, 241, 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 65% 50% at 85% 5%,  rgba(124, 58, 237, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 45% at 50% 100%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar épurée */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--slate-200);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--slate-300);
+}
+
+/* Animations globales */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dot-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.6);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -600px 0;
+  }
+  100% {
+    background-position: 600px 0;
+  }
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(32px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toast-bar {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes ring {
+  0%, 100% { transform: rotate(0deg); }
+  15%      { transform: rotate(13deg); }
+  30%      { transform: rotate(-10deg); }
+  45%      { transform: rotate(8deg); }
+  60%      { transform: rotate(-5deg); }
+  75%      { transform: rotate(3deg); }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
