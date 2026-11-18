@@ -17,7 +17,7 @@ class ItemBase(BaseModel):
     category: str = Field(..., min_length=2, max_length=50, description="Catégorie (BAG, ELECTRONICS, KEYS...)", examples=["BAG"])
     color: str = Field(..., min_length=2, max_length=50, description="Couleur principale", examples=["BLACK"])
     location: str = Field(..., min_length=2, max_length=150, description="Lieu de perte ou de découverte", examples=["Bibliothèque universitaire"])
-    description: str = Field(..., min_length=5, description="Description détaillée de l'objet", examples=["Sac à dos noir contenant des cahiers et une trousse."])
+    description: str = Field(..., min_length=2, description="Description détaillée de l'objet", examples=["Sac à dos noir contenant des cahiers et une trousse."])
     date: DateType = Field(..., description="Date à laquelle l'objet a été perdu ou trouvé", examples=["2026-11-15"])
 
 
@@ -37,7 +37,7 @@ class ItemUpdate(BaseModel):
     category: Optional[str] = Field(None, min_length=2, max_length=50)
     color: Optional[str] = Field(None, min_length=2, max_length=50)
     location: Optional[str] = Field(None, min_length=2, max_length=150)
-    description: Optional[str] = Field(None, min_length=5)
+    description: Optional[str] = Field(None, min_length=2)
     date: Optional[DateType] = None
 
 

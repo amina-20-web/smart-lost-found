@@ -66,12 +66,26 @@ const CreateItemPage = ({ userId }) => {
       const created = await createItem(payload);
       setSuccessItem(created);
     } catch (err) {
-      setError(
-        err.response?.data?.detail?.[0]?.msg ||
-        err.response?.data?.detail ||
-        err.message ||
-        'Erreur lors de la déclaration de l’objet.'
-      );
+      const pydanticError = err.response?.data?.detail;
+      if (Array.isArray(pydanticError) && pydanticError.length > 0) {
+        const firstErr = pydanticError[0];
+        const fieldName = firstErr.loc?.slice(-1)[0] || 'Champ';
+        const labels = {
+          title: 'Titre',
+          category: 'Catégorie',
+          color: 'Couleur',
+          location: 'Lieu',
+          description: 'Description',
+          date: 'Date',
+          type: 'Type',
+        };
+        const friendlyField = labels[fieldName] || fieldName;
+        setError(`Le champ « ${friendlyField} » doit contenir au moins 2 caractères (${firstErr.msg}).`);
+      } else if (typeof pydanticError === 'string') {
+        setError(pydanticError);
+      } else {
+        setError(err.message || 'Erreur lors de la déclaration de l’objet.');
+      }
     } finally {
       setSubmitting(false);
     }
