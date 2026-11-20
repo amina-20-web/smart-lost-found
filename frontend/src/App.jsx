@@ -21,6 +21,9 @@ import ToastContainer, { useToasts } from './components/ToastNotification.jsx';
 import NotificationsPage from './pages/NotificationsPage.jsx';
 import ItemsPage from './pages/ItemsPage.jsx';
 import CreateItemPage from './pages/CreateItemPage.jsx';
+import MatchesPage from './pages/MatchesPage.jsx';
+import MatchingDashboardPage from './pages/MatchingDashboardPage.jsx';
+import MatchDetailPage from './pages/MatchDetailPage.jsx';
 
 import {
   markAsRead,
@@ -399,6 +402,14 @@ const Navbar = ({
               <span className="slf-nav-unread-pill">{unreadCount}</span>
             )}
           </NavLink>
+
+          <NavLink
+            to="/matching"
+            className={({ isActive }) => `slf-nav-item${isActive ? ' active' : ''}`}
+          >
+            <Sparkles size={15} />
+            <span>Matching</span>
+          </NavLink>
         </div>
 
         {/* Côté droit : Bouton Déclarer + Cloche + Sélecteur Utilisateur */}
@@ -647,83 +658,7 @@ const HomePage = ({ notifications = [], unreadCount = 0 }) => {
 // ─────────────────────────────────────────────────────────────────
 //  Page de Détail du Match (Route : /matches/:lostItemId/:foundItemId)
 // ─────────────────────────────────────────────────────────────────
-const MatchDetailPage = () => {
-  const { lostItemId, foundItemId } = useParams();
-  const navigate = useNavigate();
-
-  return (
-    <div style={{ maxWidth: 660, margin: '0 auto', padding: '3.5rem 1.5rem 5rem' }}>
-      <div
-        style={{
-          background: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(226, 232, 240, 0.9)',
-          borderRadius: 22,
-          overflow: 'hidden',
-          boxShadow: '0 20px 45px -10px rgba(15, 23, 42, 0.1)',
-        }}
-      >
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
-            padding: '1.75rem 2rem',
-            color: '#FFFFFF',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.35rem' }}>
-            <Zap size={22} />
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0 }}>
-              Détail de la Correspondance
-            </h2>
-          </div>
-          <p style={{ fontSize: '0.84rem', color: 'rgba(255, 255, 255, 0.8)', margin: 0 }}>
-            Analyse détaillée de l'événement de matching détecté
-          </p>
-        </div>
-
-        <div style={{ padding: '2rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '1rem', marginBottom: '1.75rem' }}>
-            <div style={{ background: '#EFF6FF', border: '1px solid #DBEAFE', borderRadius: 14, padding: '1.1rem', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#2563EB', textTransform: 'uppercase' }}>
-                Objet Perdu
-              </div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#1E40AF', marginTop: 2 }}>
-                #{lostItemId}
-              </div>
-            </div>
-
-            <div style={{ color: '#94A3B8', fontSize: '1.2rem', fontWeight: 800 }}>↔</div>
-
-            <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 14, padding: '1.1rem', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#059669', textTransform: 'uppercase' }}>
-                Objet Trouvé
-              </div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#065F46', marginTop: 2 }}>
-                #{foundItemId}
-              </div>
-            </div>
-          </div>
-
-          <p style={{ fontSize: '0.88rem', color: '#64748B', lineHeight: 1.6, marginBottom: '1.75rem' }}>
-            Cette fiche technique est prête pour la liaison avec les microservices <code>item-service</code>{' '}
-            et <code>matching-service</code> de l'application.
-          </p>
-
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button
-              type="button"
-              onClick={() => navigate('/notifications')}
-              className="slf-action-btn primary"
-              style={{ padding: '0.65rem 1.25rem' }}
-            >
-              ← Retour au Centre de Notifications
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+// (Composant MatchDetailPage importé depuis ./pages/MatchDetailPage.jsx)
 
 // ─────────────────────────────────────────────────────────────────
 //  Composant Racine App
@@ -830,6 +765,18 @@ const App = () => {
                 userId={userId}
               />
             }
+          />
+          <Route
+            path="/matching"
+            element={<MatchingDashboardPage />}
+          />
+          <Route
+            path="/matches"
+            element={<MatchesPage userId={userId} />}
+          />
+          <Route
+            path="/matches/:id"
+            element={<MatchDetailPage />}
           />
           <Route
             path="/matches/:lostItemId/:foundItemId"
